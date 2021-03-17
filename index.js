@@ -40,22 +40,16 @@ const getAllDomains = async (page = 1) => {
 	return mapped;
 };
 
-const listDnsRecods = async id => {
+const listDnsRecords = async id => {
 	const { data } = await instance.get(`/zones/${id}/dns_records`);
 	return data.result;
 };
 
 const mapDnsRecords = async zones => {
-	const dnsRecords = {};
+	const promieses = zones.map(i => listDnsRecords(i.id));
+	const responses = await Promise.all(promieses);
 
-	for (zone of zones) {
-		console.log(`Getting records for ${zone.domain}`);
-		const records = await listDnsRecods(zone.id);
-		dnsRecords[zone.domain] = records;
-	}
-
-	// map records to domain
-	return zones.map(i => ({ ...i, records: dnsRecords[i.domain] }));
+	return zones.map((zone, i) => ({ ...zone, records: responses[i] }));
 };
 
 const getOldPleskDomains = async () => {
@@ -65,11 +59,10 @@ const getOldPleskDomains = async () => {
 	zones = await mapDnsRecords(zones);
 
 	// filter domains
-	const filtered = zones.filter(item =>
-		item.records.some(r => r.type === 'A' && r.content === '18.221.148.66')
-	);
+	const filtered = zones.filter(item => item.records.some(r => r.type === 'A' && r.content === '18.221.148.66'));
 
 	fs.writeFileSync('data.json', JSON.stringify(filtered));
+	console.log('completed');
 };
 
 const updateDnsRecord = async (domain, zoneId, id) => {
@@ -88,11 +81,16 @@ const updateDnsRecord = async (domain, zoneId, id) => {
 	}
 };
 
-(async () => {
-	for (zone of zonesData) {
-		const record = zone.records.find(
-			i => i.type === 'A' && i.content === '18.221.148.66'
-		);
-		await updateDnsRecord(zone.domain, zone.id, record.id);
+const updateToNewPlesk = async () => {
+	const promieses = zonesData.map(zone => {
+		const record = zone.records.find(i => i.type === 'A' && i.content === '18.221.148.66');
+		return updateDnsRecord(zone.domain, zone.id, record.id);
+	});
+
+	try {
+		await Promise.all(promieses);
+		console.log('All domain updated successfully!');
+	} catch (err) {
+		console.log('Error 💥', err);
 	}
-})();
+};
