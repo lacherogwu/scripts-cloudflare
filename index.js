@@ -1,7 +1,5 @@
 require('dotenv').config();
 const axios = require('axios');
-const fs = require('fs');
-const zonesData = require('./data.json');
 
 const instance = axios.create({
 	baseURL: 'https://api.cloudflare.com/client/v4',
@@ -59,10 +57,9 @@ const getOldPleskDomains = async () => {
 	zones = await mapDnsRecords(zones);
 
 	// filter domains
-	const filtered = zones.filter(item => item.records.some(r => r.type === 'A' && r.content === '18.221.148.66'));
+	const filtered = zones.filter(item => item.records.some(r => r.type === 'A' && r.content === oldIp));
 
-	fs.writeFileSync('data.json', JSON.stringify(filtered));
-	console.log('completed');
+	return filtered;
 };
 
 const updateDnsRecord = async (domain, zoneId, id) => {
@@ -70,7 +67,7 @@ const updateDnsRecord = async (domain, zoneId, id) => {
 		await instance.put(`/zones/${zoneId}/dns_records/${id}`, {
 			type: 'A',
 			name: domain,
-			content: '1.2.3.4',
+			content: newIp,
 			ttl: 1,
 			proxied: true,
 		});
@@ -81,9 +78,10 @@ const updateDnsRecord = async (domain, zoneId, id) => {
 	}
 };
 
-const updateToNewPlesk = async () => {
-	const promieses = zonesData.map(zone => {
-		const record = zone.records.find(i => i.type === 'A' && i.content === '18.221.148.66');
+const updateToNewPlesk = async domains => {
+	const promieses = domains.map(zone => {
+		const record = zone.records.find(i => i.type === 'A' && i.content === oldIp);
+		if (!record) return;
 		return updateDnsRecord(zone.domain, zone.id, record.id);
 	});
 
@@ -94,3 +92,11 @@ const updateToNewPlesk = async () => {
 		console.log('Error 💥', err);
 	}
 };
+
+const oldIp = '1.2.3.4';
+const newIp = '1.2.3.5';
+
+(async () => {
+	const domains = await getOldPleskDomains();
+	await updateToNewPlesk(domains);
+})();
