@@ -34,18 +34,23 @@ const changeSecurityLevel = async (zoneId, level = 'medium') => {
 	const { data } = await instance.patch(`/zones/${zoneId}/settings/security_level`, {
 		value: level,
 	});
-	console.log(data);
+
 	return data;
 };
+
+const resultFilter = (result, error) => result.filter(i => i.status === (!error ? 'fulfilled' : 'rejected')).map(i => (!error ? i.value : i.reason));
 
 wrapper(async () => {
 	console.clear();
 
 	const res = await listZones();
 	const mapped = res.map(({ id, name }) => ({ id, name }));
-	console.log(mapped);
-	console.log(mapped.length);
 
-	console.log(mapped[0]);
-	await changeSecurityLevel(mapped[0].id, 'under_attack');
+	const result = await Promise.allSettled(mapped.map(i => changeSecurityLevel(i.id, 'under_attack')));
+
+	const fulfilled = resultFilter(result);
+	const rejected = resultFilter(result, true);
+
+	console.log(fulfilled);
+	console.log(rejected);
 })();
