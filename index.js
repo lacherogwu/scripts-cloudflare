@@ -38,6 +38,10 @@ const changeSecurityLevel = async (zoneId, level = 'medium') => {
 	return data;
 };
 
+const createFirewallRules = (zoneId, rule) => {
+	return instance.post(`/zones/${zoneId}/firewall/rules`, [rule]);
+};
+
 const resultFilter = (result, error) => result.filter(i => i.status === (!error ? 'fulfilled' : 'rejected')).map(i => (!error ? i.value : i.reason));
 
 wrapper(async () => {
@@ -46,7 +50,10 @@ wrapper(async () => {
 	const res = await listZones();
 	const mapped = res.map(({ id, name }) => ({ id, name }));
 
-	const result = await Promise.allSettled(mapped.map(i => changeSecurityLevel(i.id, 'under_attack')));
+	// const mapped = [{ id: '612d0b5146a3451dba8bec0affc743a7', name: 'academiacapital.net' }];
+	// console.log(mapped[0]);
+
+	const result = await Promise.allSettled(mapped.map(i => createFirewallRules(i.id)));
 
 	const fulfilled = resultFilter(result);
 	const rejected = resultFilter(result, true);
