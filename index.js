@@ -1,7 +1,10 @@
 require('dotenv').config();
 const axios = require('axios');
+<<<<<<< HEAD
 
 const wrapper = fn => (...args) => fn(...args).catch(e => console.log(e.response ? e.response.data : e.message));
+=======
+>>>>>>> 41ebcdc676fbaadc628f0256d393f05fd4853288
 
 const instance = axios.create({
 	baseURL: 'https://api.cloudflare.com/client/v4',
@@ -22,7 +25,7 @@ const listZones = async (page = 1, zones = []) => {
 	return data.result.length === 50 ? listZones(++page, zones) : zones;
 };
 
-const listDnsRecods = async id => {
+const listDnsRecords = async id => {
 	const { data } = await instance.get(`/zones/${id}/dns_records`);
 	return data.result;
 };
