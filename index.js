@@ -1,43 +1,25 @@
 require('dotenv').config();
 const axios = require('axios');
-const fs = require('fs');
-const zonesData = require('./data.json');
+
+const wrapper = fn => (...args) => fn(...args).catch(e => console.log(e.response ? e.response.data : e.message));
 
 const instance = axios.create({
 	baseURL: 'https://api.cloudflare.com/client/v4',
 	headers: {
-		Authorization: `Bearer ${process.env.API_KEY}`,
+		Authorization: `Bearer ${process.env[process.env.username]}`,
 	},
 });
 
-const listZones = async (page = 1) => {
+const listZones = async (page = 1, zones = []) => {
 	const params = new URLSearchParams({
 		page,
 		per_page: 50,
 	});
 
 	const { data } = await instance.get(`/zones?${params}`);
+	zones = [...zones, ...data.result];
 
-	return data.result;
-};
-
-const getAllDomains = async (page = 1) => {
-	const list = [];
-
-	let data;
-	while (!data || data.length === 50) {
-		data = await listZones(page);
-		list.push(...data);
-		page++;
-	}
-
-	const filtered = list.filter(item => item.status === 'active');
-	const mapped = filtered.map(item => ({
-		id: item.id,
-		domain: item.name,
-	}));
-	console.log('Received all domains');
-	return mapped;
+	return data.result.length === 50 ? listZones(++page, zones) : zones;
 };
 
 const listDnsRecods = async id => {
@@ -45,54 +27,25 @@ const listDnsRecods = async id => {
 	return data.result;
 };
 
-const mapDnsRecords = async zones => {
-	const dnsRecords = {};
+const changeSecurityLevel = async (zoneId, level = 'medium') => {
+	const list = ['off', 'essentially_off', 'low', 'medium', 'high', 'under_attack'];
+	if (!list.includes(level)) throw new Error(`Level must be one of: ${list.join(', ')}`);
 
-	for (zone of zones) {
-		console.log(`Getting records for ${zone.domain}`);
-		const records = await listDnsRecods(zone.id);
-		dnsRecords[zone.domain] = records;
-	}
-
-	// map records to domain
-	return zones.map(i => ({ ...i, records: dnsRecords[i.domain] }));
+	const { data } = await instance.patch(`/zones/${zoneId}/settings/security_level`, {
+		value: level,
+	});
+	console.log(data);
+	return data;
 };
 
-const getOldPleskDomains = async () => {
-	let zones = await getAllDomains();
+wrapper(async () => {
+	console.clear();
 
-	// retrieve records
-	zones = await mapDnsRecords(zones);
+	const res = await listZones();
+	const mapped = res.map(({ id, name }) => ({ id, name }));
+	console.log(mapped);
+	console.log(mapped.length);
 
-	// filter domains
-	const filtered = zones.filter(item =>
-		item.records.some(r => r.type === 'A' && r.content === '18.221.148.66')
-	);
-
-	fs.writeFileSync('data.json', JSON.stringify(filtered));
-};
-
-const updateDnsRecord = async (domain, zoneId, id) => {
-	try {
-		await instance.put(`/zones/${zoneId}/dns_records/${id}`, {
-			type: 'A',
-			name: domain,
-			content: '1.2.3.4',
-			ttl: 1,
-			proxied: true,
-		});
-		console.log(`${domain} updated successfully!`);
-	} catch (err) {
-		console.log(err);
-		console.log(`${domain} has an error!`);
-	}
-};
-
-(async () => {
-	for (zone of zonesData) {
-		const record = zone.records.find(
-			i => i.type === 'A' && i.content === '18.221.148.66'
-		);
-		await updateDnsRecord(zone.domain, zone.id, record.id);
-	}
+	console.log(mapped[0]);
+	await changeSecurityLevel(mapped[0].id, 'under_attack');
 })();
